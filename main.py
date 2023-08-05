@@ -315,7 +315,7 @@ public class Runner {{
             print(cucumber_metodos) 
 
             # Abrimos la pagina step definitions
-            file_path = os.path.join(stepDefinitions_folder, "InicioSteps.java")
+            file_path = os.path.join(stepDefinitions_folder, "InicioStepsDefinitions.java")
 
             # Escribir los métodos en el archivo
             with open(file_path, "w") as file:
@@ -372,7 +372,7 @@ text_area.pack(padx=5, pady=5)
 
 # Texto predeterminado para el área de texto
 default_text = """#language:es 
-característica:
+Característica:
 
 @smokeTest
 Escenario:
