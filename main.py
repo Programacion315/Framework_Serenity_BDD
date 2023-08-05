@@ -4,6 +4,11 @@ import os
 import shutil
 from urllib.parse import urlparse
 import re
+import subprocess
+
+
+
+
 
 def remove_tildes(text):
     # Mapa de reemplazos para las tildes
@@ -79,12 +84,113 @@ def url_to_package_name(url):
     
 
 def replace_build_gradle():
+
+    #Margen del generador de codigo
     selected_folder = entry_path.get()
     link_text = entry_link.get()
     contenido = text_area.get("1.0", tk.END)
     contenido = remove_tildes(contenido)
     print("Contenido del área de texto:")
     print(contenido)
+
+    # Creacion del proyecto inicio
+   
+    def run_gradle_command(command, selection):
+        try:
+            current_dir = os.getcwd()
+            os.chdir(selected_folder)
+            
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,            
+                executable="C:/gradle-8.2.1/bin/gradle.bat"  # Reemplaza con la ruta completa si es necesario
+            )
+            
+            process.stdin.write(selection + "\n")
+            process.stdin.flush()
+
+            stdout, stderr = process.communicate()
+
+            if process.returncode == 0:
+                print("Ejecución exitosa:")
+                print(stdout)
+            else:
+                print("Error en la ejecución:")
+                print(stderr)
+            
+            os.chdir(current_dir)
+            
+        except subprocess.CalledProcessError as e:
+            print(f"Error al ejecutar el comando: {e}")
+            print(e.stderr)
+
+    #Función para copiar carpetas
+    def copy_folders(source_folder, destination_folder):
+        try:
+            # Copiar la carpeta con todas las subcarpetas y archivos
+            shutil.copytree(source_folder, destination_folder)
+
+            print(f"Carpeta {source_folder} copiada exitosamente a {destination_folder}")
+        except Exception as e:
+            print(f"Error al copiar la carpeta: {e}")
+
+
+    def delete_folder(folder):
+        try:
+            if os.path.exists(folder):
+                shutil.rmtree(folder)
+                print(f"Carpeta {folder} eliminada exitosamente")
+            else:
+                print(f"Carpeta {folder} no encontrada en el destino")
+        except Exception as e:
+            print(f"Error al eliminar la carpeta: {e}")
+
+    def delete_file(file_path):
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"Archivo {file_path} eliminado exitosamente")
+            else:
+                print(f"Archivo {file_path} no encontrado en el destino")
+        except Exception as e:
+            print(f"Error al eliminar el archivo: {e}")
+
+    # Comandos de Gradle con su respectiva selección
+    commands_with_selection = [
+        ("gradle init --project-name myproyect --type basic --dsl groovy","2"),
+        # Puedes agregar más comandos de Gradle aquí si es necesario
+    ]
+
+    for command, selection in commands_with_selection:
+        run_gradle_command(command, selection)
+
+    # Rutas originales de las carpetas a copiar
+    original_folders = [
+        "achivosBase\\.gradle",
+        "achivosBase\\.idea",
+        "achivosBase\\src",    
+    ]
+
+    # Ruta de destino para la copia
+    destination_folder = selected_folder
+    # Eliminar la carpeta .gradle en el destino antes de copiarla
+    delete_folder(os.path.join(destination_folder, ".gradle"))
+    delete_folder(os.path.join(destination_folder, ".gitattributes"))
+
+    # Copiar las carpetas
+    for folder in original_folders:
+        folder_name = os.path.basename(folder)
+        destination_path = os.path.join(destination_folder, folder_name)
+        copy_folders(folder, destination_path)
+    # Creacion del proyecto fin   
+ 
+    #fin generador de codigo
+
+
+   
     build_gradle_original_path = ""  # Variable con valor predeterminado
     if selected_folder and os.path.isdir(selected_folder):
         build_gradle_original_path = os.path.join(selected_folder, "build.gradle")
@@ -290,7 +396,7 @@ message_label = tk.Label(root, textvariable=message_var, fg="green", font=("Aria
 message_label.pack(pady=10)
 
 # Botón para realizar el reemplazo
-replace_button = tk.Button(root, text="Generado con exito", command=replace_build_gradle)
+replace_button = tk.Button(root, text="Generar", command=replace_build_gradle)
 replace_button.pack()
 
 # Ejecuta la ventana
