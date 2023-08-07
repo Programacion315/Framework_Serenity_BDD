@@ -7,9 +7,6 @@ import re
 import subprocess
 
 
-
-
-
 def remove_tildes(text):
     # Mapa de reemplazos para las tildes
     tildes_replacements = {
@@ -35,13 +32,13 @@ def generate_cucumber_methods(text):
     lines = text.split("\n")
     for line in lines:
         # Buscamos las palabras clave en cada línea
-        match = re.search(r"\s*(Cuando|Dado| Y |Entonces)\s*(.*)", line)
+        match = re.search(r"\s*(Cuando|Dado|Y|Entonces)\s*(.*)", line)
         if match:
             keyword = match.group(1)
             step = match.group(2)
 
             # Si es una palabra clave "Y", reemplazamos por "Cuando"
-            if keyword == " Y ":
+            if keyword == "Y":
                 keyword = "Cuando"
 
             # Generamos el método correspondiente
@@ -66,24 +63,20 @@ def url_to_package_name(url):
     parsed_url = urlparse(url)
 
     # Obtener el nombre de dominio sin "www."
-
     domain_parts = parsed_url.netloc.split(".")
     if domain_parts[0].lower() == "www":
         domain_parts.pop(0)
-    domain = ".".join(domain_parts)
 
-    print("ACA ESTA EL DOMINIO " + domain)
-
-    partes = domain.split(".")
-
-    partes_invertidas = partes[::-1]
-
-    package_name = ".".join(partes_invertidas)
+    # Invertir la lista de partes del dominio y luego unirlas con puntos
+    package_name = ".".join(reversed(domain_parts))
 
     return package_name
     
 
 def replace_build_gradle():
+    
+    # Obtener la URL original antes de invertirla
+    original_url = entry_link.get()
 
     #Margen del generador de codigo
     selected_folder = entry_path.get()
@@ -179,16 +172,25 @@ def replace_build_gradle():
     # Eliminar la carpeta .gradle en el destino antes de copiarla
     delete_folder(os.path.join(destination_folder, ".gradle"))
     delete_folder(os.path.join(destination_folder, ".gitattributes"))
+    
+    #Cambiar el archivo .gitignore INICIO
+    # Eliminar el archivo .gitignore original(que no sirve) del proyecto Java
+    gitignore_path = os.path.join(selected_folder, ".gitignore")
+    delete_file(gitignore_path)
+    # Copiar el archivo .gitignore desde archivosBase al proyecto Java
+    gitignore_base_path = os.path.abspath(os.path.join("archivosBase", ".gitignore"))
+    shutil.copy(gitignore_base_path, selected_folder)
+    #Cambiar el archivo .gitignore FIN
 
     # Copiar las carpetas
     for folder in original_folders:
         folder_name = os.path.basename(folder)
         destination_path = os.path.join(destination_folder, folder_name)
         copy_folders(folder, destination_path)
-    # Creacion del proyecto fin   
+    # Creacion del proyecto fin  
  
     #fin generador de codigo
-
+    
 
    
     build_gradle_original_path = ""  # Variable con valor predeterminado
@@ -234,8 +236,23 @@ def replace_build_gradle():
 
             # Convierte el link_text en el nombre del archivo
             nombre_paquete = url_to_package_name(link_text)
+            
+            #Codigo para Modificar el build.gradle INICIO
+            # Ruta completa del archivo build.gradle
+            build_gradle_original_path = os.path.join(selected_folder, "build.gradle")
 
+            # Leer el contenido del archivo build.gradle base en archivoBase
+            build_gradle_base_path = os.path.abspath(os.path.join("archivosBase", "build.gradle"))
+            with open(build_gradle_base_path, "r") as base_file:
+                base_content = base_file.read()
 
+            # Reemplazar la línea 'group' con el nombre de paquete generado dinámicamente
+            modified_content = re.sub(r"^\s*group\s+'[^']+'", f"group '{nombre_paquete}'", base_content, flags=re.MULTILINE)
+
+            # Sobrescribir el contenido del archivo original con el contenido modificado
+            with open(build_gradle_original_path, "w") as new_file:
+                new_file.write(modified_content)
+            #Codigo para Modificar el build.gradle FIN
 
             # Crear la carpeta con el nombre del paquete dentro de "selected_folder/src/main/java"
             package_folder = os.path.join(selected_folder, "src", "main", "java", nombre_paquete)
@@ -262,6 +279,9 @@ def replace_build_gradle():
             utils_folder = os.path.join(package_folder, "utils")
             if not os.path.exists(utils_folder):
                 os.makedirs(utils_folder)
+
+
+        
 
             # Crear las carpetas TEST
 
@@ -314,12 +334,40 @@ public class Runner {{
             print("Metodos de cucumber: ")
             print(cucumber_metodos) 
 
-            # Abrimos la pagina step definitions
-            file_path = os.path.join(stepDefinitions_folder, "InicioStepsDefinitions.java")
+            # Creación del archivo InicioStepsDefinitions.java
+            step_definitions_package = f"{nombre_paquete}.stepDefinitions"
+            steps_package = f"{nombre_paquete}.steps"
 
-            # Escribir los métodos en el archivo
-            with open(file_path, "w") as file:
-                file.write(cucumber_metodos)
+            # Generar los métodos cucumber
+            cucumber_methods = generate_cucumber_methods(contenido)        
+
+            # Combinar ambos códigos
+            java_steps_content = f"""package {step_definitions_package};
+
+import io.cucumber.java.es.*;
+import {steps_package}.InicioSteps;
+import net.thucydides.core.annotations.Steps;
+
+public class InicioStepsDefinitions {{
+    @Steps
+    InicioSteps inicioSteps;
+
+    // Agregar la llamada al metodo abrirNavegador() dentro del primer metodo cucumber
+    @Dado("que el usuario abre la pagina demo")
+    public void queElUsuarioAbreLaPaginaDemo() {{
+        inicioSteps.abrirNavegador();
+    }}
+
+    {cucumber_methods}    
+}}
+"""
+
+            # Ruta completa del archivo InicioStepsDefinitions.java
+            step_definitions_file_path = os.path.join(stepDefinitions_folder, "InicioStepsDefinitions.java")
+
+            # Escribir el contenido en el archivo InicioStepsDefinitions.java
+            with open(step_definitions_file_path, "w") as file:
+                file.write(java_steps_content)
 
 
             show_message("¡Reemplazo exitoso!")
@@ -328,6 +376,64 @@ public class Runner {{
         except Exception as e:
             show_message(f"Error: {str(e)}")
             print(str(e))
+    
+    #Generador el achivo InicioPage.java INICIO
+    def generate_inicio_page_class(package_name):
+        # Ruta completa del archivo InicioPage.java
+        inicio_page_file_path = os.path.join(selected_folder, "src", "main", "java", package_name, "pageObject", "InicioPage.java")
+
+        # Texto de la clase InicioPage.java
+        inicio_page_content = f"""package {package_name}.pageObject;
+
+import net.serenitybdd.core.pages.PageObject;
+
+public class InicioPage extends PageObject {{
+    // Aqui puedes agregar los metodos y atributos especificos de la pagina de inicio
+}}
+"""
+
+        # Escribir el contenido en el archivo InicioPage.java
+        with open(inicio_page_file_path, "w") as inicio_page_file:
+            inicio_page_file.write(inicio_page_content)
+    #Generador el achivo InicioPage.java FIN
+
+    # Generar la clase InicioPage.java con el package adecuado
+    generate_inicio_page_class(nombre_paquete)
+
+    #Generador del archivo InicioSteps INICIO
+     # Crear la clase Java dentro de "steps"
+    # Ruta completa del archivo InicioSteps.java
+    steps_file_path = os.path.join(steps_folder, "InicioSteps.java")
+
+    # Ajustar el nombre del paquete para el primer import
+    first_import_package = ".".join(nombre_paquete.split(".")[::-1])
+
+    # Generar el nombre del paquete para el import de InicioPage
+    inicio_page_package = url_to_package_name(link_text)
+
+    # Texto que se pondrá en el archivo Java que se creará en la carpeta "steps"
+    # Texto que se pondrá en el archivo Java que se creará en la carpeta "steps"
+    java_steps_content = f"""package {nombre_paquete}.steps;
+
+import {nombre_paquete}.pageObject.InicioPage;
+import net.thucydides.core.annotations.Step;
+import org.fluentlenium.core.annotation.Page;
+
+public class InicioSteps {{
+    @Page
+    InicioPage inicio;
+
+    @Step("Abrir el navegador")
+    public void abrirNavegador() {{
+        inicio.openUrl("{original_url}");
+    }}
+}}
+"""
+    # Escribir el contenido en el archivo InicioSteps.java
+    with open(steps_file_path, "w") as steps_file:
+        steps_file.write(java_steps_content)
+    #Generador del archivo InicioSteps FIN
+
 
 def show_message(message):
     message_var.set(message)
